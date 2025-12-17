@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <comment>Menu CRUD Queries</comment>
+    
+    <entry key="selectAllMenus">
+        SELECT 
+               a.menu_code
+             , a.menu_name
+             , a.menu_price
+             , a.category_code
+             , b.category_name
+             , a.orderable_status 
+          FROM tbl_menu a
+          JOIN tbl_category b ON a.category_code = b.category_code
+         ORDER BY a.menu_code
+    </entry>
+    
+    <entry key="selectMenuById">
+        SELECT 
+               a.menu_code
+             , a.menu_name
+             , a.menu_price
+             , a.category_code
+             , b.category_name
+             , a.orderable_status
+          FROM tbl_menu a
+          JOIN tbl_category b ON a.category_code = b.category_code
+         WHERE a.menu_code = ?
+    </entry>
+    
+    <entry key="insertMenu">
+        INSERT 
+          INTO tbl_menu 
+        (
+          menu_code
+        , menu_name
+        , menu_price
+        , category_code
+        , orderable_status
+        ) 
+        VALUES 
+        (
+          null
+        , ?
+        , ?
+        , ?
+        , ?
+        )
+    </entry>
+    
+    <entry key="updateMenu">
+        UPDATE tbl_menu
+           SET menu_name = ?
+             , menu_price = ?
+             , category_code = ?
+             , orderable_status = ?
+         WHERE menu_code = ?
+    </entry>
+    
+    <entry key="deleteMenu">
+        DELETE 
+          FROM tbl_menu
+         WHERE menu_code = ?
+    </entry>
+
+    <entry key="selectAllCategories">
+        SELECT
+               category_code
+             , category_name
+             , ref_category_code
+          FROM tbl_category
+         ORDER BY category_code
+    </entry>
+</properties>
