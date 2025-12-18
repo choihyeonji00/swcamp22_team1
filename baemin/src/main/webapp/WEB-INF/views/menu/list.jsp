@@ -7,9 +7,6 @@
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/style.css">
 
-            <%-- Fallback Icon Logic (Inline for simplicity or move to backend completely) --%>
-                <%-- Using JSTL Logic in logic bean is better, but here we assume icon is handled effectively or use
-                    simple map --%>
         </head>
 
         <body>
