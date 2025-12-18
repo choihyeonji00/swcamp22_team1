@@ -1,4 +1,4 @@
-# 🛵 배달의 민족 사장님 광장 - 팀원(비전공자)을 위한 코드 가이드
+# 🛵 배달의 민족 사장님 광장 - 팀원을 위한 코드 가이드
 
 <div align="center">
   <img src="https://img.shields.io/badge/Project-Baemin_Menu_System-2AC1BC?style=for-the-badge&logo=baemin&logoColor=white">
