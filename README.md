@@ -25,6 +25,7 @@
     *   [5-5. 화면 (View - JavaScript AJAX)](#5-5-화면-view---javascript-fetch-api)
     *   [5-6. 화면 및 템플릿 엔진 (JSP, JSTL, EL)](#5-6-화면-및-템플릿-엔진-jsp-jstl-el)
     *   [5-7. 화면 소스 코드 상세 분석 (View Analysis)](#5-7-화면-소스-코드-상세-분석-view-analysis)
+    *   [5-8. 심화 개념: 쿼리 스트링과 상태 관리 (State Management)](#5-8-🧠-심화-개념-쿼리-스트링과-상태-관리-state-management)
 6.  **마무리 가이드**
 
 ---
@@ -69,9 +70,12 @@
 
 ## 2. ✨ 주요 기능 소개
 
-*   **메뉴 목록 및 상세 조회**: 모든 메뉴를 카드 형태로 조회하고, 클릭 시 상세 내용을 모달로 확인합니다.
-*   **비동기 메뉴 관리 (CRUD)**: 페이지 이동 없이 메뉴를 등록, 수정, 삭제합니다.
-*   **실시간 목록 갱신**: 데이터 변경 시 AJAX를 통해 목록 영역만 즉시 업데이트됩니다.
+*   **메뉴 목록 및 상세 조회**: 모든 메뉴를 카드 형태로 조회하며, 클릭 시 모달로 상세 정보를 확인합니다.
+*   **서버 측 고도화 검색**: 메뉴 이름을 DB의 `LIKE` 연산자를 사용하여 실시간으로 검색합니다.
+*   **카테고리 및 상태 필터링**: 카테고리별 분류 및 '품절 제외' 필터를 통해 원하는 메뉴만 빠르게 골라볼 수 있습니다.
+*   **하이브리드 다중 정렬**: 이름순(가나다)과 가격순(고가/저가) 정렬을 독립적으로 조합하여 9가지 정렬 결과를 제공합니다.
+*   **비동기 메뉴 관리 (CRUD)**: 페이지 이동 없이 메뉴를 등록, 수정, 삭제하며 현재의 필터 상태가 유지됩니다.
+*   **실시간 개수 업데이트**: 필터 결과에 따른 메뉴 총 개수를 레이아웃 상단에 즉시 표시합니다.
 
 ---
 
@@ -129,24 +133,41 @@ public class MenuDTO {
 
 ```java
 public class MenuDAO {
-    // 쿼리 실행 메서드: DB에 데이터를 물리적으로 삽입
-    public int insertMenu(Connection con, MenuDTO menu) {
-        PreparedStatement pstmt = null; 
-        int result = 0;
-        String query = prop.getProperty("insertMenu");
+    // [고도화된 검색/필터/정렬 메서드]
+    public List<MenuDTO> selectMenusWithFilter(Connection con, String searchQuery, 
+                                               Integer categoryCode, boolean excludeSoldOut, 
+                                               String nameSort, String priceSort) {
+        // ... 생략 ...
+        String query = prop.getProperty("selectMenusWithFilter");
+        pstmt = con.prepareStatement(query);
+        
+        // 1. 검색어 바인딩 (LIKE %...%)
+        pstmt.setString(1, searchQuery); 
+        pstmt.setString(2, searchQuery);
+        
+        // 2. 카테고리 필터 (NULL 체크 처리)
+        if (categoryCode == null) {
+            pstmt.setNull(3, java.sql.Types.INTEGER);
+            pstmt.setNull(4, java.sql.Types.INTEGER);
+        } else {
+            pstmt.setInt(3, categoryCode);
+            pstmt.setInt(4, categoryCode);
+        }
 
-        try {
-            pstmt = con.prepareStatement(query);
-            // 물음표(?) 자리에 DTO의 데이터를 순차적으로 바인딩
-            pstmt.setString(1, menu.getMenuName());
-            pstmt.setInt(2, menu.getMenuPrice());
-            // ...
-            result = pstmt.executeUpdate(); // 쿼리 실행 후 영향받은 행의 수 반환
-        } catch (SQLException e) { ... }
-        return result; 
+        // 3. 품절 제외 여부 및 4. 정렬(nameSort, priceSort) 파라미터 바인딩
+        pstmt.setString(5, String.valueOf(excludeSoldOut));
+        pstmt.setString(6, nameSort);
+        pstmt.setString(7, nameSort);
+        pstmt.setString(8, priceSort);
+        pstmt.setString(9, priceSort);
+        
+        // ... 실행 후 List 담기 ...
     }
 }
 ```
+
+> **💡 기술 포인트: 동적 쿼리 바인딩**  
+> 하나의 쿼리(`selectMenusWithFilter`)에서 `? IS NULL OR COLUMN = ?` 패턴을 사용하여, 사용자가 선택하지 않은 필터는 무시하고 선택한 필터만 정확히 적용하는 고급 JDBC 기법을 사용합니다.
 
 ### 5-3. 비즈니스 로직 (Service)
 
@@ -163,19 +184,29 @@ public class MenuService {
         JDBCTemplate.close(con); // 자원 반납
         return result;
     }
+
+    // [고도화] 필터링된 메뉴 검색 서비스
+    public List<MenuDTO> searchMenus(String searchQuery, Integer categoryCode, 
+                                     boolean excludeSoldOut, String nameSort, String priceSort) {
+        Connection con = JDBCTemplate.getConnection();
+        List<MenuDTO> menuList = menuDAO.selectMenusWithFilter(con, searchQuery, categoryCode, 
+                                                              excludeSoldOut, nameSort, priceSort);
+        JDBCTemplate.close(con);
+        return menuList;
+    }
 }
 ```
 
 ### 5-4. 컨트롤러 (Controller - Servlet)
 ![Java](https://img.shields.io/badge/Java-MenuController.java-000000?style=flat&logo=java&logoColor=white)
 
-| 코드 라인 | 상세 기술 해설 |
+| 코드 라인 / 변수 | 상세 기술 해설 |
 | :--- | :--- |
-| `@WebServlet("/menu/*")` | `/menu` 경로로 들어오는 모든 요청을 이 클래스로 매핑합니다. |
-| `pathInfo = req.getPathInfo();` | 상세 경로(예: `/regist`)를 분석하여 실행할 로직을 선택합니다. |
-| `req.getParameter("name")` | 브라우저 전송 폼(Form)에서 입력된 데이터를 이름으로 식별하여 추출합니다. |
-| `out.print("success")` | AJAX 요청에 대해 처리 상태를 문자열로 즉시 응답합니다. |
-| `getRequestDispatcher` | 해당 요청을 처리할 JSP 뷰로 데이터와 함께 제어권을 넘깁니다. |
+| `String searchQuery` | 브라우저에서 보낸 검색어(`?searchQuery=...`)를 추출합니다. |
+| `boolean excludeSoldOut` | 품절 제외 체크박스 상태를 불리언(`true/false`)으로 파싱합니다. |
+| `nameSort / priceSort` | 9가지 정렬 조합을 위해 두 개의 정렬 파라미터를 각각 처리합니다. |
+| `req.getHeader("X-Requested-With")` | 요청이 AJAX인지 일반 브라우저 주소창 입력인지 구분하는 중요한 단서입니다. |
+| `req.getRequestDispatcher` | AJAX인 경우 전체 페이지가 아닌 `list_content.jsp`(목록 조각)만 전송합니다. |
 
 ### 5-5. 화면 (View - JavaScript Fetch API)
 
@@ -237,41 +268,45 @@ public class MenuService {
 ```
 
 #### ② 메인 관리 화면 (`list.jsp`)
-전체 페이지 레이아웃과 **모달(Modal)** 구조가 선언된 파일입니다.
+전체 페이지 레이아웃과 **필터/정렬 컨트롤**, 모달 구조가 포함된 핵심 파일입니다.
 
 ```jsp
-<%-- 1. 목록이 들어갈 빈 상자 (AJAX로 이 안의 내용만 바뀝니다) --%>
-<div class="menu-list" id="menuListContainer">
-    <jsp:include page="list_content.jsp" /> <%-- 초기 로딩 시 목록 조각을 포함 --%>
-</div>
-
-<%-- 2. 등록 모달 구조 (ID를 통해 자바스크립트로 제어) --%>
-<div id="registModal" class="modal-overlay"> <!-- 평소엔 display: none 상태 -->
-    <div class="modal-content">
-        <h2>메뉴 등록</h2>
-        <form id="registForm"> <!-- 폼 ID를 통해 AJAX 제출 처리 -->
-            <input type="text" name="menuName" required> <!-- name 속성이 DTO 필드와 매칭됨 -->
-            <select name="categoryCode">
-                <%-- 카테고리 목록을 반복해서 옵션을 만듭니다 --%>
-                <c:forEach var="category" items="${categoryList}">
-                    <option value="${category.categoryCode}">${category.categoryName}</option>
-                </c:forEach>
-            </select>
-            <button type="submit">등록하기</button>
-        </form>
+<%-- 1. 고도화된 필터 및 검색창 영역 --%>
+<div class="filter-search-controls">
+    <div class="menu-count-display">
+        총 <span id="menuCount">${menuList.size()}</span>개 메뉴 <!-- 실시간 개수 표시 -->
+    </div>
+    <div class="search-filter-row">
+        <select id="categoryFilter" onchange="performSearch()">...</select>
+        <div class="search-box">
+            <input type="text" id="searchInput" onkeypress="...">
+            <button onclick="performSearch()">검색</button> <!-- 서버측 LIKE 검색 호출 -->
+        </div>
+    </div>
+    <!-- 품절 제외 커스텀 체크박스 -->
+    <div class="exclude-soldout-container">
+        <label class="exclude-soldout-wrapper">
+            <input type="checkbox" id="excludeSoldOut" onchange="performSearch()"> 품절 제외
+        </label>
+    </div>
+    <div class="sort-controls">
+        <button id="sortName" onclick="toggleSort('name')">이름순</button>
+        <button id="sortPrice" onclick="toggleSort('price')">가격순</button>
     </div>
 </div>
 
-<%-- 3. 수정 모달 (숨겨진 입력창 hidden이 핵심!) --%>
-<div id="updateModal" class="modal-overlay">
-    <form id="updateForm">
-        <%-- 수정할 메뉴의 번호(PK)를 몰래 담아 서버로 보냅니다 --%>
-        <input type="hidden" name="menuCode" id="updateMenuCode">
-        <input type="text" name="menuName" id="updateMenuName">
-        <!-- ... -->
-    </form>
+<%-- 2. 목록이 들어갈 빈 상자 (AJAX로 이 안의 내용만 바뀝니다) --%>
+<div class="menu-list" id="menuListContainer">
+    <jsp:include page="list_content.jsp" />
 </div>
 
+<%-- 3. 등록/수정 모달 구조 (생략) --%>
+<div id="registModal" class="modal-overlay">...</div>
+<div id="updateModal" class="modal-overlay">...</div>
+```
+
+> **💡 기술 포인트: 상태 유지형 AJAX (`performSearch`)**  
+> 검색 조건이 바뀔 때마다 `URLSearchParams`를 사용하여 모든 필터 상태(검색어, 카테고리, 품절여부, 정렬)를 주소창에 업데이트하고 동시에 서버로 보내, 화면 새로고침 없이도 현재 상태를 완벽히 유지합니다.
 #### ③ 메인 입구 페이지 (`index.jsp`)
 서비스의 첫 대문 역할을 하는 페이지입니다.
 
@@ -286,7 +321,16 @@ public class MenuService {
     <%-- 버튼 클릭 시 '/menu/list' 주소로 이동하는 링크입니다 --%>
     <a href="menu/list" class="btn-start">메뉴 관리 시작하기</a>
 </div>
-```
+
+---
+
+## 5-8. 🧠 심화 개념: 쿼리 스트링과 상태 관리 (State Management)
+
+우리 프로젝트에서 가장 중요한 "사용자 경험"을 만드는 기술입니다.
+
+1.  **쿼리 스트링 (Query String)**: `?searchQuery=치킨&categoryCode=1` 처럼 URL 뒤에 붙는 데이터입니다. 서버는 이를 보고 어떤 데이터를 뽑아줄지 결정합니다.
+2.  **History API (`pushState`)**: 페이지 이동 없이 브라우저의 주소창 URL만 살짝 바꾸는 기술입니다. 이를 통해 사용자가 '새로고침'을 해도 방금 보던 검색 결과가 그대로 유지됩니다.
+3.  **다중 조건 정렬 로직**: 이름순과 가격순을 각각 `asc`(오름차순), `desc`(내림차순), `""`(해제)의 3가지 상태로 관리하여 조합합니다.
 
 #### ④ 오류 안내 페이지 (`error.jsp`)
 예상치 못한 문제가 생겼을 때 사용자에게 보여주는 안내 화면입니다.
